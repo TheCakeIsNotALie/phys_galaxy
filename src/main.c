@@ -7,7 +7,7 @@
 #include "particle.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-#include <windows.h>
+#include <time.h>
 
 #define E_PI 3.1415926535897932384626433832795028841971693993751058209749445923078164062
 
@@ -19,14 +19,15 @@ char *tmpStrDebug;
 	free(tmpStrDebug);
 
 #define MAX_THREADS 4
-#define NB_PARTICLES 10
+#define NB_PARTICLES 20
 
-#define MIN_BOUND_X -200
-#define MAX_BOUND_X 200
-#define MIN_BOUND_Y -200
-#define MAX_BOUND_Y 200
-#define MAX_MASS 10
+#define MIN_BOUND_X -400
+#define MAX_BOUND_X 400
+#define MIN_BOUND_Y -400
+#define MAX_BOUND_Y 400
+#define MAX_MASS 5
 #define MAX_SPEED 10
+#define TIME_DIALATION 0.001
 #define G 6.67
 
 Uint64 NOW = 0;
@@ -35,6 +36,7 @@ double deltaTime = 0;
 
 Matrix_t *g_origin;
 Particle_t *g_particles;
+Particle_t *g_black_hole;
 int g_window_width = 640, g_window_height = 480;
 bool g_press_right, g_press_left, g_press_control;
 
@@ -112,6 +114,8 @@ void draw_circle(SDL_Renderer *renderer, Rectangle_t *rect)
 
 int fill_circle(SDL_Renderer *renderer, int x, int y, int radius)
 {
+	int origin_x = (int)matrix_valueOf(g_origin, 0, 0);
+	int origin_y = (int)matrix_valueOf(g_origin, 0, 1);
 	int offsetx, offsety, d;
 	int status;
 
@@ -123,11 +127,10 @@ int fill_circle(SDL_Renderer *renderer, int x, int y, int radius)
 	while (offsety >= offsetx)
 	{
 
-		status += SDL_RenderDrawLine(renderer, x - offsety, y + offsetx, x + offsety, y + offsetx);
-		status += SDL_RenderDrawLine(renderer, x - offsetx, y + offsety, x + offsetx, y + offsety);
-		status += SDL_RenderDrawLine(renderer, x - offsetx, y - offsety, x + offsetx, y - offsety);
-		status += SDL_RenderDrawLine(renderer, x - offsety, y - offsetx, x + offsety, y - offsetx);
-
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsety, origin_y + y + offsetx, origin_x + x + offsety, origin_y + y + offsetx);
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsetx, origin_y + y + offsety, origin_x + x + offsetx, origin_y + y + offsety);
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsetx, origin_y + y - offsety, origin_x + x + offsetx, origin_y + y - offsety);
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsety, origin_y + y - offsetx, origin_x + x + offsety, origin_y + y - offsetx);
 		if (status < 0)
 		{
 			status = -1;
@@ -160,16 +163,17 @@ void PhysicsUpdate()
 	//for every particle
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
-		//calculate the gravity forces with every other
+		//declare temporary variables
 		Matrix_t *newSpeed, *tmp;
 		INITIALISE_MATRIX_VECTOR2(tmp, 0, 0)
+		Matrix_t *diff, *diffMult;
+		double mult;
+
+		//calculate the gravity forces with every other particle
 		for (size_t j = 0; j < NB_PARTICLES; j++)
 		{
 			if (i != j)
 			{
-				Matrix_t *diff, *diffMult;
-				double mult;
-
 				diff = matrix_sub(g_particles[j].pos, g_particles[i].pos);
 				mult = G * ((g_particles[i].mass * g_particles[j].mass) / pow(matrix_vector2_magnitude(diff), 3));
 				diffMult = matrix_multiply_double(diff, mult);
@@ -179,8 +183,14 @@ void PhysicsUpdate()
 				matrix_destroy(diffMult);
 			}
 		}
+		//calculate the gravity force with the black hole
+		diff = matrix_sub(g_black_hole->pos, g_particles[i].pos);
+		mult = G * ((g_particles[i].mass * g_black_hole->mass) / pow(matrix_vector2_magnitude(diff), 3));
+		diffMult = matrix_multiply_double(diff, mult);
+		tmp = matrix_add(tmp, diff);
+
 		//fix the changes to the deltatime
-		newSpeed = matrix_multiply_double(tmp, deltaTime/100);
+		newSpeed = matrix_multiply_double(tmp, deltaTime * TIME_DIALATION);
 		particle_addSpeed(&g_particles[i], newSpeed);
 
 		matrix_destroy(newSpeed);
@@ -194,30 +204,31 @@ void PhysicsUpdate()
 	}
 }
 
-void RenderGame(SDL_Renderer *renderer)
+void Render(SDL_Renderer *renderer)
 {
 	SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
 	Matrix_t *size;
 	INITIALISE_MATRIX_VECTOR2(size, 5, 5)
-	Rectangle_t *rect;
+	//Rectangle_t *rect;
 
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
-		rect = rect_initializer(g_particles[i].pos, size);
-		draw_circle(renderer, rect);
-		rect_destroy(rect);
+		// rect = rect_initializer(g_particles[i].pos, size);
+		// draw_circle(renderer, rect);
+		fill_circle(renderer, matrix_valueOf(g_particles[i].pos, 0, 0), matrix_valueOf(g_particles[i].pos, 0, 1), g_particles[i].mass);
+		//rect_destroy(rect);
 	}
+
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 128);
+	fill_circle(renderer, matrix_valueOf(g_black_hole->pos, 0, 0), matrix_valueOf(g_black_hole->pos, 0, 1), 10);
 }
 
 int main(int argc, char *argv[])
 {
+	// ----- SDL INITIALIZATION ------
 	int runSDL = 1;
 	SDL_Event event;
-	SDL_GLContext context;
 	char fpsBuffer[50];
-
-	//set random
-	//srand((unsigned)time(&t));
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
@@ -233,11 +244,11 @@ int main(int argc, char *argv[])
 	}
 
 	// //set anti alias (NOT WORKING)
+	// SDL_GLContext context;
 	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
 	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 	// SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	// SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-
 	// glEnable(GL_MULTISAMPLE);
 
 	SDL_Window *win = SDL_CreateWindow("Particles Simulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, g_window_width, g_window_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
@@ -270,31 +281,40 @@ int main(int argc, char *argv[])
 		SDL_Quit();
 		return 1;
 	}
+	// ----- END SDL INITIALIZATION -----
 
-	SDL_Color white = {255, 255, 255, 255}; // this is the color in rgba format, maxing out all would give you the color white, and it will be your text's color
+	SDL_Color white = {255, 255, 255, 255}; //color in rgba format
 
-	SDL_Rect message_rect; //create a rect
-	message_rect.x = 0;	   //controls the rect's x coordinate
-	message_rect.y = 0;	   // controls the rect's y coordinte
-	message_rect.w = 30;   // controls the width of the rect
-	message_rect.h = 50;   // controls the height of the rect
+	SDL_Rect fps_rect;
+	fps_rect.x = 0;
+	fps_rect.y = 0;
+	fps_rect.w = 30; //width
+	fps_rect.h = 50; //height
 
 	//init origin
 	g_origin = matrix_initializer(1, 2);
 	*matrix_addressOf(g_origin, 0, 0) = (double)g_window_width / 2.0;
 	*matrix_addressOf(g_origin, 0, 1) = (double)g_window_height / 2.0;
 
+	//set random seed
+	srand(time(NULL));
+
+	//init black hole
+	Matrix_t *zero;
+	INITIALISE_MATRIX_VECTOR2(zero, 0, 0)
+	g_black_hole = particle_initializer(zero, zero, 100000);
+
 	//init particles
-	g_particles = (Particle_t*)calloc(NB_PARTICLES, sizeof(Particle_t));
-	printf("Particles init\n");
+	g_particles = (Particle_t *)calloc(NB_PARTICLES, sizeof(Particle_t));
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
 		Matrix_t *tmpPos, *tmpSpeed;
 		INITIALISE_MATRIX_VECTOR2(tmpPos, rand() % (MAX_BOUND_X - MIN_BOUND_X) + MIN_BOUND_X, rand() % (MAX_BOUND_Y - MIN_BOUND_Y) + MIN_BOUND_Y)
-		INITIALISE_MATRIX_VECTOR2(tmpSpeed, (rand() % MAX_SPEED) - MAX_SPEED/2, (rand()  % MAX_SPEED) - MAX_SPEED/2)
+		INITIALISE_MATRIX_VECTOR2(tmpSpeed, (rand() % MAX_SPEED) - MAX_SPEED / 2, (rand() % MAX_SPEED) - MAX_SPEED / 2)
 		g_particles[i] = *particle_initializer(tmpPos, tmpSpeed, (rand() % MAX_MASS) + 1);
 	}
 
+	//start main SDL loop
 	printf("Start main SDL loop\n");
 	NOW = SDL_GetPerformanceCounter();
 	while (runSDL)
@@ -381,10 +401,10 @@ int main(int argc, char *argv[])
 		SDL_Texture *fpsTexture = SDL_CreateTextureFromSurface(ren, fpsMessage);
 		SDL_FreeSurface(fpsMessage);
 
-		SDL_RenderCopy(ren, fpsTexture, NULL, &message_rect);
+		SDL_RenderCopy(ren, fpsTexture, NULL, &fps_rect);
 
 		PhysicsUpdate();
-		RenderGame(ren);
+		Render(ren);
 
 		// Render the rect to the screen
 		SDL_RenderPresent(ren);
@@ -393,13 +413,20 @@ int main(int argc, char *argv[])
 		//SDL_Delay(500);
 	}
 
-	//Do some cleanup
+	// SDL Cleanup
 	TTF_CloseFont(arial);
 	SDL_DestroyRenderer(ren);
 	SDL_DestroyWindow(win);
 	TTF_Quit();
 	SDL_Quit();
+
+	// app variables cleanup
 	matrix_destroy(g_origin);
+	particle_destroy(g_black_hole);
+	for (size_t i = 0; i < NB_PARTICLES; i++)
+	{
+		particle_destroy(&g_particles[i]);
+	}
 
 	return 0;
 }
