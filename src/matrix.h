@@ -80,6 +80,17 @@ double matrix_vector2_dot_product(Matrix_t *one, Matrix_t *two);
  * @return double
  */
 double matrix_vector2_magnitude(Matrix_t *matrix);
+/**
+ * @brief Compute the distance between two Matrix_t representing a 2d vector (Matrix_t of size : (1, 3)).
+ * @return double
+ */
+double matrix_vector2_distance(Matrix_t *one, Matrix_t *two);
+/**
+ * @brief Multiply a Matrix_t representing a 2d vector (Matrix_t of size : (1, 3)) by a scalar number.
+ * @return double
+ */
+Matrix_t *matrix_vector2_multiply_double(Matrix_t *matrix, double scalar);
+
 
 /**
  * @brief Compute the vector product of two Matrix_t (has to have the same size).

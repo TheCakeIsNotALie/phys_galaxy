@@ -18,17 +18,19 @@ char *tmpStrDebug;
 	printf(tmpStrDebug);                \
 	free(tmpStrDebug);
 
-#define MAX_THREADS 4
-#define NB_PARTICLES 20
+#define NB_PARTICLES 250
 
-#define MIN_BOUND_X -400
-#define MAX_BOUND_X 400
-#define MIN_BOUND_Y -400
-#define MAX_BOUND_Y 400
-#define MAX_MASS 5
-#define MAX_SPEED 10
-#define TIME_DIALATION 0.001
-#define G 6.67
+#define INITIAL_WINDOW_HEIGHT 720
+#define INITIAL_WINDOW_WIDTH 1280
+#define SCALE 1
+#define MIN_BOUND_X (-(INITIAL_WINDOW_WIDTH * SCALE / 2))  //left most value possible for x
+#define MAX_BOUND_X (INITIAL_WINDOW_WIDTH * SCALE / 2)	   //right most value possible for x
+#define MIN_BOUND_Y (-(INITIAL_WINDOW_HEIGHT * SCALE / 2)) //bottom most value possible for y
+#define MAX_BOUND_Y (INITIAL_WINDOW_HEIGHT * SCALE / 2)	   //top most value possible for y
+#define MIN_MASS (1 * SCALE)
+#define MAX_MASS (10 * SCALE)
+#define TIME_DIALATION (25 * SCALE)
+#define G (6.67430 * pow(10, -11))
 
 Uint64 NOW = 0;
 Uint64 LAST = 0;
@@ -37,80 +39,8 @@ double deltaTime = 0;
 Matrix_t *g_origin;
 Particle_t *g_particles;
 Particle_t *g_black_hole;
-int g_window_width = 640, g_window_height = 480;
+int g_window_width = INITIAL_WINDOW_WIDTH, g_window_height = INITIAL_WINDOW_HEIGHT;
 bool g_press_right, g_press_left, g_press_control;
-
-/**
- * @brief Draw a Rectangle with it's four points
- * @return Void
- */
-void draw_rectangle(SDL_Renderer *renderer, Rectangle_t *rect)
-{
-	// Render rect
-	int origin_x = (int)matrix_valueOf(g_origin, 0, 0);
-	int origin_y = (int)matrix_valueOf(g_origin, 0, 1);
-
-	SDL_RenderDrawLine(renderer, origin_x + (int)matrix_valueOf(rect->ul, 0, 0), origin_y - (int)matrix_valueOf(rect->ul, 0, 1), origin_x + (int)matrix_valueOf(rect->ur, 0, 0), origin_y - (int)matrix_valueOf(rect->ur, 0, 1));
-	SDL_RenderDrawLine(renderer, origin_x + (int)matrix_valueOf(rect->ur, 0, 0), origin_y - (int)matrix_valueOf(rect->ur, 0, 1), origin_x + (int)matrix_valueOf(rect->lr, 0, 0), origin_y - (int)matrix_valueOf(rect->lr, 0, 1));
-	SDL_RenderDrawLine(renderer, origin_x + (int)matrix_valueOf(rect->lr, 0, 0), origin_y - (int)matrix_valueOf(rect->lr, 0, 1), origin_x + (int)matrix_valueOf(rect->ll, 0, 0), origin_y - (int)matrix_valueOf(rect->ll, 0, 1));
-	SDL_RenderDrawLine(renderer, origin_x + (int)matrix_valueOf(rect->ll, 0, 0), origin_y - (int)matrix_valueOf(rect->ll, 0, 1), origin_x + (int)matrix_valueOf(rect->ul, 0, 0), origin_y - (int)matrix_valueOf(rect->ul, 0, 1));
-}
-
-/**
- * @brief Draw a circle with it's bounding square
- * Expecting a rectangle with no transformation as transformations will not be applied to the circle drawing
- * @return Void
- */
-void draw_circle(SDL_Renderer *renderer, Rectangle_t *rect)
-{
-	int origin_x = (int)matrix_valueOf(g_origin, 0, 0);
-	int origin_y = (int)matrix_valueOf(g_origin, 0, 1);
-
-	Matrix_t *size;
-
-	size = matrix_sub(rect->ul, rect->lr);
-
-	*matrix_addressOf(size, 0, 0) = fabs(matrix_valueOf(size, 0, 0));
-	*matrix_addressOf(size, 0, 1) = fabs(matrix_valueOf(size, 0, 1));
-
-	int centerX = (int)(matrix_valueOf(rect->ul, 0, 0) + matrix_valueOf(size, 0, 0) / 2.0);
-	int centerY = (int)(matrix_valueOf(rect->ul, 0, 1) - matrix_valueOf(size, 0, 1) / 2.0);
-	int diameter = matrix_valueOf(size, 0, 0);
-	int x = ((int)(diameter / 2.0) - 1);
-	int y = 0;
-	int tx = 1;
-	int ty = 1;
-	int error = (tx - diameter);
-
-	while (x >= y)
-	{
-		//  Each of the following renders an octant of the circle
-		SDL_RenderDrawPoint(renderer, origin_x + centerX + x, origin_y - centerY - y);
-		SDL_RenderDrawPoint(renderer, origin_x + centerX + x, origin_y - centerY + y);
-		SDL_RenderDrawPoint(renderer, origin_x + centerX - x, origin_y - centerY - y);
-		SDL_RenderDrawPoint(renderer, origin_x + centerX - x, origin_y - centerY + y);
-		SDL_RenderDrawPoint(renderer, origin_x + centerX + y, origin_y - centerY - x);
-		SDL_RenderDrawPoint(renderer, origin_x + centerX + y, origin_y - centerY + x);
-		SDL_RenderDrawPoint(renderer, origin_x + centerX - y, origin_y - centerY - x);
-		SDL_RenderDrawPoint(renderer, origin_x + centerX - y, origin_y - centerY + x);
-
-		if (error <= 0)
-		{
-			++y;
-			error += ty;
-			ty += 2;
-		}
-
-		if (error > 0)
-		{
-			--x;
-			tx += 2;
-			error += (tx - diameter);
-		}
-	}
-
-	matrix_destroy(size);
-}
 
 int fill_circle(SDL_Renderer *renderer, int x, int y, int radius)
 {
@@ -127,10 +57,10 @@ int fill_circle(SDL_Renderer *renderer, int x, int y, int radius)
 	while (offsety >= offsetx)
 	{
 
-		status += SDL_RenderDrawLine(renderer, origin_x + x - offsety, origin_y + y + offsetx, origin_x + x + offsety, origin_y + y + offsetx);
-		status += SDL_RenderDrawLine(renderer, origin_x + x - offsetx, origin_y + y + offsety, origin_x + x + offsetx, origin_y + y + offsety);
-		status += SDL_RenderDrawLine(renderer, origin_x + x - offsetx, origin_y + y - offsety, origin_x + x + offsetx, origin_y + y - offsety);
-		status += SDL_RenderDrawLine(renderer, origin_x + x - offsety, origin_y + y - offsetx, origin_x + x + offsety, origin_y + y - offsetx);
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsety, origin_y - y + offsetx, origin_x + x + offsety, origin_y - y + offsetx);
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsetx, origin_y - y + offsety, origin_x + x + offsetx, origin_y - y + offsety);
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsetx, origin_y - y - offsety, origin_x + x + offsetx, origin_y - y - offsety);
+		status += SDL_RenderDrawLine(renderer, origin_x + x - offsety, origin_y - y - offsetx, origin_x + x + offsety, origin_y - y - offsetx);
 		if (status < 0)
 		{
 			status = -1;
@@ -158,69 +88,105 @@ int fill_circle(SDL_Renderer *renderer, int x, int y, int radius)
 	return status;
 }
 
+/**
+ * @brief Get the gravitational force acting on the first particle from the second particle.
+ * @return Matrix_t* the gravitational force as a 2d vector.
+ */
+Matrix_t *gravitational_force(Particle_t *first, Particle_t *second)
+{
+	Matrix_t *diff, *diffMult;
+	double mult;
+
+	//calculations
+	diff = matrix_sub(second->pos, first->pos);
+	mult = G * ((first->mass * second->mass) / pow(matrix_vector2_magnitude(diff), 3));
+	diffMult = matrix_vector2_multiply_double(diff, mult);
+
+	//cleanup
+	matrix_destroy(diff);
+
+	return diffMult;
+}
+
+/**
+ * @brief Updates the physics values of every particles currently in the simulation.
+ */
 void PhysicsUpdate()
 {
 	//for every particle
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
 		//declare temporary variables
-		Matrix_t *newSpeed, *tmp;
-		INITIALISE_MATRIX_VECTOR2(tmp, 0, 0)
-		Matrix_t *diff, *diffMult;
-		double mult;
+		Matrix_t *tmpTotalForce, *old;
+		INITIALISE_MATRIX_VECTOR2(tmpTotalForce, 0, 0)
+		Matrix_t *tmpForce;
 
 		//calculate the gravity forces with every other particle
 		for (size_t j = 0; j < NB_PARTICLES; j++)
 		{
 			if (i != j)
 			{
-				diff = matrix_sub(g_particles[j].pos, g_particles[i].pos);
-				mult = G * ((g_particles[i].mass * g_particles[j].mass) / pow(matrix_vector2_magnitude(diff), 3));
-				diffMult = matrix_multiply_double(diff, mult);
-				tmp = matrix_add(tmp, diff);
+				tmpForce = gravitational_force(&g_particles[i], &g_particles[j]);
 
-				matrix_destroy(diff);
-				matrix_destroy(diffMult);
+				old = tmpTotalForce;
+				tmpTotalForce = matrix_add(tmpTotalForce, tmpForce);
+
+				//cleanup
+				matrix_destroy(old);
+				matrix_destroy(tmpForce);
 			}
 		}
 		//calculate the gravity force with the black hole
-		diff = matrix_sub(g_black_hole->pos, g_particles[i].pos);
-		mult = G * ((g_particles[i].mass * g_black_hole->mass) / pow(matrix_vector2_magnitude(diff), 3));
-		diffMult = matrix_multiply_double(diff, mult);
-		tmp = matrix_add(tmp, diff);
+		tmpForce = gravitational_force(&g_particles[i], g_black_hole);
 
-		//fix the changes to the deltatime
-		newSpeed = matrix_multiply_double(tmp, deltaTime * TIME_DIALATION);
-		particle_addSpeed(&g_particles[i], newSpeed);
+		old = tmpTotalForce;
+		tmpTotalForce = matrix_add(tmpTotalForce, tmpForce); // kg * m/s^2
 
-		matrix_destroy(newSpeed);
-		matrix_destroy(tmp);
+		//translate force to acceleration then to speed
+		Matrix_t *acceleration = matrix_vector2_multiply_double(tmpTotalForce, 1 / g_particles[i].mass); // m/s^2
+		Matrix_t *speed = matrix_vector2_multiply_double(acceleration, deltaTime * TIME_DIALATION);		 // m/s
+
+		//update speed
+		particle_addSpeed(&g_particles[i], speed);
+
+		//cleanup
+		matrix_destroy(speed);
+		matrix_destroy(acceleration);
+		matrix_destroy(tmpForce);
+		matrix_destroy(old);
+		matrix_destroy(tmpTotalForce);
 	}
 
 	//change the position of every particle
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
-		particle_addPosition(&g_particles[i], g_particles[i].speed);
+		Matrix_t *deltaMove = matrix_multiply_double(g_particles[i].speed, deltaTime * TIME_DIALATION); // m
+		particle_addPosition(&g_particles[i], deltaMove);
+
+		//cleanup
+		matrix_destroy(deltaMove);
 	}
 }
 
+/**
+ * @brief Render all of the simulation.
+ */
 void Render(SDL_Renderer *renderer)
 {
-	SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
 	Matrix_t *size;
 	INITIALISE_MATRIX_VECTOR2(size, 5, 5)
-	//Rectangle_t *rect;
 
+	//draw every particles
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
-		// rect = rect_initializer(g_particles[i].pos, size);
-		// draw_circle(renderer, rect);
-		fill_circle(renderer, matrix_valueOf(g_particles[i].pos, 0, 0), matrix_valueOf(g_particles[i].pos, 0, 1), g_particles[i].mass);
-		//rect_destroy(rect);
+		fill_circle(renderer, matrix_valueOf(g_particles[i].pos, 0, 0) / SCALE, matrix_valueOf(g_particles[i].pos, 0, 1) / SCALE, g_particles[i].mass / SCALE);
+		//SDL_RenderDrawPoint(renderer, matrix_valueOf(g_origin, 0, 0) + matrix_valueOf(g_particles[i].pos, 0, 0) / SCALE, matrix_valueOf(g_origin, 0, 1) +  matrix_valueOf(g_particles[i].pos, 0, 1) / SCALE);
 	}
 
-	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 128);
-	fill_circle(renderer, matrix_valueOf(g_black_hole->pos, 0, 0), matrix_valueOf(g_black_hole->pos, 0, 1), 10);
+	//draw the black hole
+	SDL_SetRenderDrawColor(renderer, 100, 100, 100, 128);
+	fill_circle(renderer, matrix_valueOf(g_black_hole->pos, 0, 0), matrix_valueOf(g_black_hole->pos, 0, 1), 5);
 }
 
 int main(int argc, char *argv[])
@@ -242,14 +208,6 @@ int main(int argc, char *argv[])
 		SDL_Quit();
 		return 1;
 	}
-
-	// //set anti alias (NOT WORKING)
-	// SDL_GLContext context;
-	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	// SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
-	// SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	// SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-	// glEnable(GL_MULTISAMPLE);
 
 	SDL_Window *win = SDL_CreateWindow("Particles Simulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, g_window_width, g_window_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 	if (win == NULL)
@@ -285,11 +243,7 @@ int main(int argc, char *argv[])
 
 	SDL_Color white = {255, 255, 255, 255}; //color in rgba format
 
-	SDL_Rect fps_rect;
-	fps_rect.x = 0;
-	fps_rect.y = 0;
-	fps_rect.w = 30; //width
-	fps_rect.h = 50; //height
+	SDL_Rect fps_rect = {.x = 0, .y = 0, .w = 30, .h = 50};
 
 	//init origin
 	g_origin = matrix_initializer(1, 2);
@@ -302,27 +256,44 @@ int main(int argc, char *argv[])
 	//init black hole
 	Matrix_t *zero;
 	INITIALISE_MATRIX_VECTOR2(zero, 0, 0)
-	g_black_hole = particle_initializer(zero, zero, 100000);
+	g_black_hole = particle_initializer(zero, zero, pow(10, 11));
 
 	//init particles
 	g_particles = (Particle_t *)calloc(NB_PARTICLES, sizeof(Particle_t));
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
 		Matrix_t *tmpPos, *tmpSpeed;
+
 		INITIALISE_MATRIX_VECTOR2(tmpPos, rand() % (MAX_BOUND_X - MIN_BOUND_X) + MIN_BOUND_X, rand() % (MAX_BOUND_Y - MIN_BOUND_Y) + MIN_BOUND_Y)
-		INITIALISE_MATRIX_VECTOR2(tmpSpeed, (rand() % MAX_SPEED) - MAX_SPEED / 2, (rand() % MAX_SPEED) - MAX_SPEED / 2)
-		g_particles[i] = *particle_initializer(tmpPos, tmpSpeed, (rand() % MAX_MASS) + 1);
+
+		//initialise particle with no speed
+		g_particles[i] = *particle_initializer(tmpPos, zero, rand() % (MAX_MASS - MIN_MASS) + MIN_MASS);
+
+		//compute the orbital velocity and angle needed for a circular orbit
+		Matrix_t *force = gravitational_force(&g_particles[i], g_black_hole);
+		Matrix_t *acceleration = matrix_vector2_multiply_double(force, 1 / g_particles[i].mass);
+
+		double orbitalVelocity = sqrt(matrix_vector2_magnitude(acceleration) * matrix_vector2_distance(tmpPos, g_black_hole->pos));
+		double angle = atan2(matrix_valueOf(tmpPos, 0, 1), matrix_valueOf(tmpPos, 0, 0)) + E_PI / 2;
+
+		INITIALISE_MATRIX_VECTOR2(tmpSpeed, orbitalVelocity * cos(angle), orbitalVelocity * sin(angle))
+
+		particle_addSpeed(&g_particles[i], tmpSpeed);
+
+		matrix_destroy(force);
+		matrix_destroy(acceleration);
+		matrix_destroy(tmpPos);
+		matrix_destroy(tmpSpeed);
 	}
 
-	//start main SDL loop
 	printf("Start main SDL loop\n");
 	NOW = SDL_GetPerformanceCounter();
 	while (runSDL)
 	{
 		LAST = NOW;
 		NOW = SDL_GetPerformanceCounter();
-
 		deltaTime = (double)((NOW - LAST) / (double)SDL_GetPerformanceFrequency());
+
 		//Events handling
 		while (SDL_PollEvent(&event) > 0)
 		{
@@ -348,42 +319,8 @@ int main(int argc, char *argv[])
 					break;
 				}
 				break;
-			case SDL_KEYDOWN:
-				switch (event.key.keysym.sym)
-				{
-				case SDLK_a:
-					g_press_left = true;
-					break;
-				case SDLK_d:
-					g_press_right = true;
-					break;
-				case SDLK_LSHIFT:
-					g_press_control = true;
-					break;
-				default:
-					printf("Key down not processed\n");
-					break;
-				}
-				break;
-			case SDL_KEYUP:
-				switch (event.key.keysym.sym)
-				{
-				case SDLK_a:
-					g_press_left = false;
-					break;
-				case SDLK_d:
-					g_press_right = false;
-					break;
-				case SDLK_LSHIFT:
-					g_press_control = false;
-					break;
-				default:
-					printf("Key up not processed\n");
-					break;
-				}
-				break;
 			default:
-				printf("Event not processed\n");
+				//printf("Event not processed\n");
 				break;
 			}
 		}
@@ -403,14 +340,12 @@ int main(int argc, char *argv[])
 
 		SDL_RenderCopy(ren, fpsTexture, NULL, &fps_rect);
 
+		//Physics and render
 		PhysicsUpdate();
 		Render(ren);
 
-		// Render the rect to the screen
 		SDL_RenderPresent(ren);
-
 		SDL_DestroyTexture(fpsTexture);
-		//SDL_Delay(500);
 	}
 
 	// SDL Cleanup
@@ -422,6 +357,7 @@ int main(int argc, char *argv[])
 
 	// app variables cleanup
 	matrix_destroy(g_origin);
+	matrix_destroy(zero);
 	particle_destroy(g_black_hole);
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{

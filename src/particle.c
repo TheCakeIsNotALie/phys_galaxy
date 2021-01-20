@@ -37,6 +37,19 @@ void particle_addMass(Particle_t *particle, double mass)
     particle->mass += mass;
 }
 
+void particle_print(Particle_t *particle)
+{
+    char *tmp = matrix_toString(particle->pos);
+	printf("Position : \n");
+    printf(tmp);
+    free(tmp);
+    tmp = matrix_toString(particle->speed);
+    printf("Speed : \n");
+    printf(tmp);
+    free(tmp);
+    printf("Mass : %lf\n", particle->mass);
+}
+
 void particle_destroy(Particle_t *particle)
 {
     matrix_destroy(particle->pos);

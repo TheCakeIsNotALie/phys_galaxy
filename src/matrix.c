@@ -192,22 +192,32 @@ double matrix_vector2_magnitude(Matrix_t *matrix)
 {
 	double result = 0;
 
-	if (matrix->size_x == 1)
-	{
-		//do not use last value of vector since it is only used for transformations
-		for (int i = 0; i < matrix->size_y - 1; i++)
-		{
-			result += pow(matrix_valueOf(matrix, 0, i), 2);
-		}
-		result = sqrt(result);
-	}
-	else
-	{
-		//Cannot calculate magnitude
-		result = -1;
-	}
+	result += pow(matrix_valueOf(matrix, 0, 0), 2);
+	result += pow(matrix_valueOf(matrix, 0, 1), 2);
+	
+	result = sqrt(result);
 
 	return result;
+}
+
+double matrix_vector2_distance(Matrix_t *one, Matrix_t *two)
+{
+	double distance = 0;
+
+	distance = sqrt(pow(matrix_valueOf(two, 0, 0) - matrix_valueOf(one, 0, 0), 2) + pow(matrix_valueOf(two, 0, 1) - matrix_valueOf(one, 0, 1), 2));
+
+	return distance;
+}
+
+Matrix_t *matrix_vector2_multiply_double(Matrix_t *matrix, double scalar)
+{
+	Matrix_t *newMatrix = matrix_initializer(matrix->size_x, matrix->size_y);
+
+	*matrix_addressOf(newMatrix, 0, 0) = matrix_valueOf(matrix, 0, 0) * scalar;
+	*matrix_addressOf(newMatrix, 0, 1) = matrix_valueOf(matrix, 0, 1) * scalar;
+	*matrix_addressOf(newMatrix, 0, 2) = 1;
+
+	return newMatrix;
 }
 
 Matrix_t *matrix_identity(int size)
