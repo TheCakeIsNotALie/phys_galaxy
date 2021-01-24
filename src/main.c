@@ -29,7 +29,8 @@ char *tmpStrDebug;
 #define MAX_BOUND_Y (INITIAL_WINDOW_HEIGHT * SCALE / 2)	   //top most value possible for y
 #define MIN_MASS (1 * SCALE)
 #define MAX_MASS (10 * SCALE)
-#define TIME_DIALATION (25 * SCALE)
+#define TIME_STEP (10 * SCALE)
+#define TIME_STEP_SQUARED (TIME_STEP * TIME_STEP)
 
 Uint64 NOW = 0;
 Uint64 LAST = 0;
@@ -92,15 +93,16 @@ int fill_circle(SDL_Renderer *renderer, int x, int y, int radius)
  */
 void PhysicsUpdate()
 {
+	Matrix_t *nextPositions[NB_PARTICLES];
+
 	//for every particle
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
 		//declare temporary variables
-		Matrix_t *tmpTotalForce, *old;
+		Matrix_t *tmpForce, *tmpTotalForce, *old;
 		INITIALISE_MATRIX_VECTOR2(tmpTotalForce, 0, 0)
-		Matrix_t *tmpForce;
 
-		//calculate the gravity forces with every other particle
+		//calculate the gravity forces with every other particle and sum them up
 		for (size_t j = 0; j < NB_PARTICLES; j++)
 		{
 			if (i != j)
@@ -121,29 +123,32 @@ void PhysicsUpdate()
 		old = tmpTotalForce;
 		tmpTotalForce = matrix_add(tmpTotalForce, tmpForce); // kg * m/s^2
 
-		//translate force to acceleration then to speed
+		//translate force to acceleration
 		Matrix_t *acceleration = matrix_vector2_multiply_double(tmpTotalForce, 1 / g_particles[i].mass); // m/s^2
-		Matrix_t *speed = matrix_vector2_multiply_double(acceleration, deltaTime * TIME_DIALATION);		 // m/s
+		
+		//compute next position and store it to update later
+		Matrix_t *tmp1 = matrix_vector2_multiply_double(g_particles[i].pos, 2); // 2x(tj)
+		Matrix_t *tmp2 = matrix_sub(tmp1, g_particles[i].lastPos); // 2x(tj) - x(tj-1)
+		Matrix_t *tmp3 = matrix_vector2_multiply_double(acceleration, TIME_STEP_SQUARED); // a(tj)*deltaT^2
+		Matrix_t *nextPos = matrix_add(tmp2, tmp3); // 2x(tj) - x(tj-1) + a(tj)*deltaT^2
 
-		//update speed
-		particle_addSpeed(&g_particles[i], speed);
+		nextPositions[i] = nextPos;
 
 		//cleanup
-		matrix_destroy(speed);
+		matrix_destroy(tmp1);
+		matrix_destroy(tmp2);
+		matrix_destroy(tmp3);
 		matrix_destroy(acceleration);
 		matrix_destroy(tmpForce);
-		matrix_destroy(old);
 		matrix_destroy(tmpTotalForce);
+		matrix_destroy(old);
 	}
 
-	//change the position of every particle
+	//update the position of every particle
 	for (size_t i = 0; i < NB_PARTICLES; i++)
-	{
-		Matrix_t *deltaMove = matrix_multiply_double(g_particles[i].speed, deltaTime * TIME_DIALATION); // m
-		particle_addPosition(&g_particles[i], deltaMove);
-
-		//cleanup
-		matrix_destroy(deltaMove);
+	{	
+		particle_updatePosition(&g_particles[i], nextPositions[i]);
+		matrix_destroy(nextPositions[i]);
 	}
 }
 
@@ -241,28 +246,28 @@ int main(int argc, char *argv[])
 	g_particles = (Particle_t *)calloc(NB_PARTICLES, sizeof(Particle_t));
 	for (size_t i = 0; i < NB_PARTICLES; i++)
 	{
-		Matrix_t *tmpPos, *tmpSpeed;
+		Matrix_t *tmpInitial, *tmpPos;
 
-		INITIALISE_MATRIX_VECTOR2(tmpPos, rand() % (MAX_BOUND_X - MIN_BOUND_X) + MIN_BOUND_X, rand() % (MAX_BOUND_Y - MIN_BOUND_Y) + MIN_BOUND_Y)
+		INITIALISE_MATRIX_VECTOR2(tmpInitial, rand() % (MAX_BOUND_X - MIN_BOUND_X) + MIN_BOUND_X, rand() % (MAX_BOUND_Y - MIN_BOUND_Y) + MIN_BOUND_Y)
 
 		//initialise particle with no speed
-		g_particles[i] = *particle_initializer(tmpPos, zero, rand() % (MAX_MASS - MIN_MASS) + MIN_MASS);
+		g_particles[i] = *particle_initializer(zero, tmpInitial, rand() % (MAX_MASS - MIN_MASS) + MIN_MASS);
 
 		//compute the orbital velocity and angle needed for a circular orbit
 		Matrix_t *force = gravitational_force(&g_particles[i], g_black_hole);
 		Matrix_t *acceleration = matrix_vector2_multiply_double(force, 1 / g_particles[i].mass);
 
-		double orbitalVelocity = sqrt(matrix_vector2_magnitude(acceleration) * matrix_vector2_distance(tmpPos, g_black_hole->pos));
-		double angle = atan2(matrix_valueOf(tmpPos, 0, 1), matrix_valueOf(tmpPos, 0, 0)) + E_PI / 2;
+		double orbitalVelocity = sqrt(matrix_vector2_magnitude(acceleration) * matrix_vector2_distance(tmpInitial, g_black_hole->pos));
+		double angle = atan2(matrix_valueOf(tmpInitial, 0, 1), matrix_valueOf(tmpInitial, 0, 0)) + E_PI / 2;
 
-		INITIALISE_MATRIX_VECTOR2(tmpSpeed, orbitalVelocity * cos(angle), orbitalVelocity * sin(angle))
+		INITIALISE_MATRIX_VECTOR2(tmpPos, matrix_valueOf(tmpInitial, 0, 0) + orbitalVelocity * TIME_STEP * cos(angle), matrix_valueOf(tmpInitial, 0, 1) + orbitalVelocity * TIME_STEP * sin(angle))
 
-		particle_addSpeed(&g_particles[i], tmpSpeed);
+		particle_updatePosition(&g_particles[i], tmpPos);
 
 		matrix_destroy(force);
 		matrix_destroy(acceleration);
 		matrix_destroy(tmpPos);
-		matrix_destroy(tmpSpeed);
+		matrix_destroy(tmpPos);
 	}
 
 	printf("Start main SDL loop\n");

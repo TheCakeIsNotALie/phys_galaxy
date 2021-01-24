@@ -3,48 +3,40 @@
 #include <stdlib.h>
 #include "tests.h"
 
-Particle_t *particle_initializer(Matrix_t *pos, Matrix_t *speed, double mass)
+Particle_t *particle_initializer(Matrix_t *lastPos, Matrix_t *pos, double mass)
 {
     Particle_t *newParticle = (Particle_t *)malloc(sizeof(Particle_t));
 
     newParticle->pos = matrix_clone(pos);
-    newParticle->speed = matrix_clone(speed);
+    newParticle->lastPos = matrix_clone(lastPos);
     newParticle->mass = mass;
 
     return newParticle;
 }
 
-void particle_addSpeed(Particle_t *particle, Matrix_t *speed)
+void particle_updatePosition(Particle_t *particle, Matrix_t *position)
 {
-    Matrix_t *old = particle->speed;
+    Matrix_t *old = particle->lastPos;
 
-    particle->speed = matrix_add(particle->speed, speed);
-    
-    matrix_destroy(old);
-}
-
-void particle_addPosition(Particle_t *particle, Matrix_t *position)
-{
-    Matrix_t *old = particle->pos;
-
-    particle->pos = matrix_add(particle->pos, position);
+    particle->lastPos = particle->pos;
+    particle->pos = matrix_clone(position);
 
     matrix_destroy(old);
 }
 
-void particle_addMass(Particle_t *particle, double mass)
+void particle_changeMass(Particle_t *particle, double massChange)
 {
-    particle->mass += mass;
+    particle->mass += massChange;
 }
 
 void particle_print(Particle_t *particle)
 {
-    char *tmp = matrix_toString(particle->pos);
-	printf("Position : \n");
+    char *tmp = matrix_toString(particle->lastPos);
+	printf("Last position : \n");
     printf(tmp);
     free(tmp);
-    tmp = matrix_toString(particle->speed);
-    printf("Speed : \n");
+    tmp = matrix_toString(particle->pos);
+    printf("Position : \n");
     printf(tmp);
     free(tmp);
     printf("Mass : %lf\n", particle->mass);
@@ -52,8 +44,8 @@ void particle_print(Particle_t *particle)
 
 void particle_destroy(Particle_t *particle)
 {
+    matrix_destroy(particle->lastPos);
     matrix_destroy(particle->pos);
-    matrix_destroy(particle->speed);
 }
 
 Matrix_t *gravitational_force(Particle_t *first, Particle_t *second)
