@@ -30,7 +30,6 @@ char *tmpStrDebug;
 #define MIN_MASS (1 * SCALE)
 #define MAX_MASS (10 * SCALE)
 #define TIME_DIALATION (25 * SCALE)
-#define G (6.67430 * pow(10, -11))
 
 Uint64 NOW = 0;
 Uint64 LAST = 0;
@@ -86,26 +85,6 @@ int fill_circle(SDL_Renderer *renderer, int x, int y, int radius)
 	}
 
 	return status;
-}
-
-/**
- * @brief Get the gravitational force acting on the first particle from the second particle.
- * @return Matrix_t* the gravitational force as a 2d vector.
- */
-Matrix_t *gravitational_force(Particle_t *first, Particle_t *second)
-{
-	Matrix_t *diff, *diffMult;
-	double mult;
-
-	//calculations
-	diff = matrix_sub(second->pos, first->pos);
-	mult = G * ((first->mass * second->mass) / pow(matrix_vector2_magnitude(diff), 3));
-	diffMult = matrix_vector2_multiply_double(diff, mult);
-
-	//cleanup
-	matrix_destroy(diff);
-
-	return diffMult;
 }
 
 /**

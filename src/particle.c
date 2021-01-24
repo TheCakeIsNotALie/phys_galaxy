@@ -56,7 +56,23 @@ void particle_destroy(Particle_t *particle)
     matrix_destroy(particle->speed);
 }
 
-//Build test : (mingw32-)gcc -o test.exe matrix.c -DUNIT_TESTS_M
+Matrix_t *gravitational_force(Particle_t *first, Particle_t *second)
+{
+	Matrix_t *diff, *diffMult;
+	double mult;
+
+	//calculations
+	diff = matrix_sub(second->pos, first->pos);
+	mult = G * ((first->mass * second->mass) / pow(matrix_vector2_magnitude(diff), 3));
+	diffMult = matrix_vector2_multiply_double(diff, mult);
+
+	//cleanup
+	matrix_destroy(diff);
+
+	return diffMult;
+}
+
+//Build test : (mingw32-)gcc -o test.exe matrix.c -DUNIT_TESTS_P
 #ifdef UNIT_TESTS_P
 /* Start the overall test suite */
 START_TESTS()
