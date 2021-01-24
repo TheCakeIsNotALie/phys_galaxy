@@ -5,6 +5,7 @@ Description : Particle structure
 */
 
 #include "matrix.h"
+#include <math.h>
 #define G (6.67430 * pow(10, -11))
 
 #pragma once
